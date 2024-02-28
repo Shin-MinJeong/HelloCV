@@ -4,42 +4,62 @@
 using namespace cv;
 using namespace std;
 
-Mat img;	 // Mat 클래스 타입의 변수 img 선언
-Point pt;
+//마스크 함수
+void mask_setTo();
+void mask_copyTo();
 
-//이전 마우스 이벤트 발생 위치를 저장하는 함수
-void on_mouse(int event, int x, int y, int flags, void*);
-//트랙바 콜백 함수
-void on_level_change(int pos, void* userdata);
-
-int main() {
+int main(void) {
 
 	cout << "Hello OpenCV" << CV_VERSION << endl;
 
-	//픽셀값이 0으로 초기화 된 400*400 크기의 영상 img
-	img = Mat::zeros(400, 400, CV_8UC1);
-
-	namedWindow("image");
-	
-	//트랙바 생성
-	//createTrackbar(트랙바이름, 트랙바 생성창, 트랙바 위치를 받을 주소, 트랙바 최대 위치, 콜백함수, 사용자 포인터)
-	createTrackbar("level", "image", 0, 10, on_level_change, (void*)&img);
-
-	imshow("image", img);
-	waitKey(0);
+	mask_setTo();
+	mask_copyTo();
 
 	return 0;
 }
 
-//트랙바 콜백 함수
-//트랙바 콜백 함수는 정해진 형식을 따라야 한다.
-//트랙바 콜백 함수(트랙바의 위치 정보, 사용자 데이터 포인터 값)
-void on_level_change(int pos, void* userdata)
-{
-    Mat img = *(Mat*)userdata;
 
-        img.setTo(pos * 16); //픽셀값 = 사용자데이터*16
-    imshow("image", img);
+void mask_setTo() {
+
+	Mat src = imread("lenna.bmp", IMREAD_COLOR);
+	Mat mask = imread("mask_smile.bmp", IMREAD_GRAYSCALE);
+
+	if (src.empty() || mask.empty()) {
+		cerr << "Image load failed!" << endl;
+		return;
+	}
+
+	//setTo(행렬 원소 값, 마스크 행렬)
+	//src 이미지를 마스크 값 만큼 노란색으로 표시한다.
+	//Scalar(파란색, 녹색, 빨간색, 투명도)
+	src.setTo(Scalar(0, 255, 255), mask);
+
+	imshow("src", src);
+	imshow("mask", mask);
+
+	waitKey();
+	destroyAllWindows();
 }
 
+void mask_copyTo() {
+	Mat src = imread("airplane.bmp", IMREAD_COLOR);
+	Mat mask = imread("mask_plane.bmp", IMREAD_GRAYSCALE);
+	Mat dst = imread("field.bmp", IMREAD_COLOR);
 
+	if (src.empty() || mask.empty() || dst.empty()) {
+		cerr << "Image load failed" << endl;
+		return;
+	}
+
+	//copyTo(복사본 행렬, 마스크 행렬)
+	//mask 영상의 픽셀값이 0이 아닌 위치에서만 복사한다.(검정색이 아닌 것)
+	//mask 변수에 0이 아닌 위치 값을 dst로 복사한다.
+	src.copyTo(dst, mask);
+
+	imshow("src", src);
+	imshow("mask", mask);
+	imshow("dst", dst);
+
+	waitKey(0);
+	destroyAllWindows();
+}
