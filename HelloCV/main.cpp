@@ -8,25 +8,18 @@
 using namespace cv;
 using namespace std;
 
-void filter_embossing();
-void blurring_mean();
-void noise_gaussian();
-void filter_bilateral();
-void filter_median();
-
-
 Mat src;
 Mat dst;
+
+void sobel_edge();
+void canny_edge();
 
 int main(void) {
 
 	utils::logging::setLogLevel(utils::logging::LOG_LEVEL_ERROR);
 
-	filter_embossing();
-	blurring_mean();
-	noise_gaussian();
-	filter_bilateral();
-	filter_median();
+	sobel_edge(); 
+	canny_edge();
 
 	waitKey(0);
 	destroyAllWindows();
@@ -34,140 +27,60 @@ int main(void) {
 	return 0;
 }
 
-//엠보싱 필터
-void filter_embossing() {	
+void sobel_edge() {
 
 	src = imread("lenna.bmp", IMREAD_GRAYSCALE);
 
 	if (src.empty()) {
-		cerr << "이미지 로드 에러" << endl;
-		return;
+	        cerr << "Image load failed!" << endl;
+	        return;
 	}
 
-	float data[] = { -1, -1, 0, -1, 0, 1, 0, 1, 1 };
-	Mat emboss(3, 3, CV_32FC1, data);
+	Mat dx, dy;
 
-	filter2D(src, dst, -1, emboss, Point(-1, -1), 128);
+	// sobel 함수를 사용하여 미분
+	// x축 방향으로 1차 편미분 = dx
+	// y축 방향으로 1차 편미분 = dy
+	Sobel(src, dx, CV_32FC1, 1, 0);
+	Sobel(src, dy, CV_32FC1, 0, 1);
 
-	imshow("emboss_src", src);
-	imshow("emboss_dst", dst);
+	Mat fmag, mag;
 
+	// magnitude 함수로 그래디언트 크기를 계산(밝기의 차이 검출)
+	// 실수형 행렬 fmag를 그레이스케일 형식으로 변환하여 mag에 저장
+	magnitude(dx, dy, fmag);
+	fmag.convertTo(mag, CV_8UC1);
+
+	// 그래디언트 크기 임계값을 150으로 설정하여 에지를 판별
+	// 행렬 edge의 원소 값은 mag 행렬 원소 값이 150보다 크면 255로, 작으면 0으로 설정
+	// 임계값을 150보다 낮게 설정하면 더 많은 에지 픽셀이 edge 영상에 나타남
+	Mat edge = mag > 150;
+
+	imshow("sobel_src", src);
+	imshow("sobel_mag", mag); // mag == 그래디언트 크기를 그레이스케일 영상 형식으로 나타낸 것
+	imshow("sobel_edge", edge); // edge == 그래디언트 크기 > 150 픽셀은 흰색으로, 그렇지 않은 픽셀은 검은색으로 표현된 이진 영상
 }
 
-//블러링
-void blurring_mean() {
+void canny_edge() {
 
-	src = imread("lenna.bmp", IMREAD_GRAYSCALE);
+	src = imread("road.bmp", IMREAD_GRAYSCALE);
 
 	if (src.empty()) {
-		cerr << "이미지 로드 에러" << endl;
+		cerr << "Image load failed!" << endl;
 		return;
 	}
 
-	imshow("blur_src", src); 
+	Mat dst1, dst2;
 
-	for (int ksize = 3; ksize < 8; ksize += 2) {
-		blur(src, dst, Size(ksize, ksize));
+	// canny 알고리즘
+	// 임계값을 낮출수록 에지로 판별되는 픽셀이 더 많아짐
+	// 임계값을 낮출수록 잡음에 해당하는 픽셀도 에지로 검출할 가능성이 높아짐
+	Canny(src, dst1, 50, 100); // 낮은 임계값 = 50 , 높은 임계값 = 100
+	Canny(src, dst2, 50, 150); // 낮은 임계값 = 50 , 높은 임계값 = 150
 
-		String desc = format("Mean: %d x %d", ksize, ksize);
-
-		putText(dst, desc, Point(10, 30), FONT_HERSHEY_PLAIN, 1.0, Scalar(255), 1, LINE_AA);
-
-		imshow("blur_dst", dst); 
-		waitKey(0);
-	}
-
-}
-
-//가우시안 필터
-void noise_gaussian() {
-
-	src = imread("lenna.bmp", IMREAD_GRAYSCALE);
-
-	if (src.empty()) {
-		cerr << "이미지 로드 에러" << endl;
-		return;
-	}
-
-	imshow("noise_src", src);
-
-	for (int stddev = 10; stddev < 31; stddev += 10) {
-		Mat noise(src.size(), CV_32SC1);
-		randn(noise, 0, stddev); //난수생성
-
-		add(src, noise, dst, Mat(), CV_8U);
-
-		String desc = format("stddev = %d", stddev);
-		putText(dst, desc, Point(10, 30), FONT_HERSHEY_SIMPLEX, 1.0, Scalar(255), 1, LINE_AA);
-
-		imshow("noise_dst", dst);
-		waitKey(0);
-
-	}
-}
-
-//양방향 필터링
-void filter_bilateral() {
-
-	src = imread("lenna.bmp", IMREAD_GRAYSCALE);
-
-	if (src.empty()) {
-		cerr << "이미지 로드 에러" << endl;
-		return;
-	}
-
-	// 평균이 0이고 표준 편차가 5인 가우시안 잡음 추가
-	Mat noise(src.size(), CV_32SC1);
-
-	randn(noise, 0, 5);
-	add(src, noise, src, Mat(), CV_8U);
-
-	// 표준 편차가 5인 가우시안 필터링 수행
-	Mat dst1;
-	GaussianBlur(src, dst1, Size(), 5);
-
-	// 색 공간의 표준 편차는 10, 좌표 공간의 표준편자는 5를 사용하는 양방향 필터링 수행
-	Mat dst2;
-	bilateralFilter(src, dst2, -1, 10 , 5);
-
-	imshow("src", src);
-	imshow("Gaussian_dst1", dst1);
-	imshow("bilateral_dst2", dst2);
+	imshow("canny_src", src);
+	imshow("canny_dst1", dst1);
+	imshow("canny_dst2", dst2);
 
 }
-
-//미디언 필터링
-void filter_median() {
-
-	src = imread("lenna.bmp", IMREAD_GRAYSCALE);
-
-	if (src.empty()) {
-		cerr << "이미지 로드 에러" << endl;
-		return;
-	}
-
-	// src 영상에서 10%에 해당하는 픽셀 값을 0 또는 255로 설정
-	// 소금&후추 잡음
-	int num = (int)(src.total() * 0.1);
-
-	for (int i = 0; i < num; i++) {
-		int x = rand() % src.cols;
-		int y = rand() % src.rows;
-
-		src.at<uchar>(y, x) = (i % 2) * 255;
-	}
-
-	// 표준 편차가 1인 가우시안 필터링 수행
-	Mat dst1;
-	GaussianBlur(src, dst1, Size(), 1);
-
-	// 크기가 3인 미디언 필터링 수행
-	Mat dst2;
-	medianBlur(src, dst2, 3);
-
-	imshow("src", src);
-	imshow("Gaussian_dst1", dst1);
-	imshow("median_dst2", dst2);
-}
-
 
